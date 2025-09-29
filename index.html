@@ -1,0 +1,208 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Matrix Rain </title>
+  <style>
+    /* Full-screen canvas + simple UI controls */
+    html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    canvas{display:block}
+    .controls{
+      position:fixed;top:12px;left:12px;backdrop-filter:blur(6px);background:rgba(0,0,0,0.35);
+      color:#b7ffb7;border:1px solid rgba(0,255,70,0.08);padding:10px;border-radius:8px;z-index:20;
+      box-shadow:0 6px 18px rgba(0,0,0,0.6);min-width:220px
+    }
+    .controls label{display:block;font-size:12px;opacity:0.9;margin-bottom:6px}
+    .controls input[type="range"]{width:100%}
+    .controls .row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+    .controls .small{font-size:12px;color:#cfeed1}
+    .hint{position:fixed;right:12px;bottom:12px;color:#7ef57e;background:rgba(0,0,0,0.28);padding:8px;border-radius:8px;font-size:13px}
+    .btn{background:transparent;border:1px solid rgba(126,245,126,0.18);color:#bffbbf;padding:6px 8px;border-radius:6px;cursor:pointer}
+    .btn:active{transform:translateY(1px)}
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>  <div class="controls" id="ui">
+    <label>Matrix Rain Controls</label>
+    <div class="row">
+      <div style="flex:1">
+        <div class="small">Speed</div>
+        <input id="speed" type="range" min="2" max="40" value="14">
+      </div>
+      <div style="width:70px;text-align:right"> <span id="speedVal">14</span></div>
+    </div><div class="row">
+  <div style="flex:1">
+    <div class="small">Density (columns)</div>
+    <input id="density" type="range" min="10" max="200" value="80">
+  </div>
+  <div style="width:70px;text-align:right"> <span id="densityVal">80</span></div>
+</div>
+
+<div class="row">
+  <div style="flex:1">
+    <div class="small">Green Hue</div>
+    <input id="hue" type="range" min="90" max="160" value="120">
+  </div>
+  <div style="width:70px;text-align:right"> <span id="hueVal">120</span></div>
+</div>
+
+<div class="row" style="justify-content:space-between;align-items:center">
+  <button id="toggle" class="btn">Pause</button>
+  <button id="trail" class="btn">Trail: On</button>
+  <button id="clear" class="btn">Clear</button>
+</div>
+
+  </div>  <div class="hint">Tip: Resize the window or go full-screen for best effect</div><script>
+// Matrix rain — vanilla JS, responsive canvas
+(() => {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  let W = canvas.width = innerWidth;
+  let H = canvas.height = innerHeight;
+
+  // Character set: numbers + letters (upper + lower), you can add symbols
+  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#$%^&*()*&^%';
+  const charArray = chars.split('');
+
+  // UI elements
+  const speedEl = document.getElementById('speed');
+  const densityEl = document.getElementById('density');
+  const hueEl = document.getElementById('hue');
+  const toggleBtn = document.getElementById('toggle');
+  const trailBtn = document.getElementById('trail');
+  const clearBtn = document.getElementById('clear');
+  const speedVal = document.getElementById('speedVal');
+  const densityVal = document.getElementById('densityVal');
+  const hueVal = document.getElementById('hueVal');
+
+  let columns = Math.floor(W / 14); // default column count
+  let drops = [];
+  let animationId;
+  let running = true;
+  let trail = true;
+
+  // Settings
+  let density = parseInt(densityEl.value, 10); // number of columns
+  let speed = parseInt(speedEl.value, 10); // speed multiplier
+  let hue = parseInt(hueEl.value, 10); // green hue
+
+  function initDrops() {
+    // Recompute columns from density: spread density across width
+    const colWidth = Math.max(8, Math.floor(W / Math.max(10, density)));
+    columns = Math.ceil(W / colWidth);
+    drops = new Array(columns).fill(0).map(() => Math.floor(Math.random() * H));
+  }
+
+  function resize() {
+    W = canvas.width = innerWidth;
+    H = canvas.height = innerHeight;
+    initDrops();
+    drawOnce();
+  }
+
+  // Draw one frame
+  function draw() {
+    // Fade the existing canvas slightly to create the trail effect.
+    if (trail) {
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      ctx.clearRect(0, 0, W, H);
+    }
+
+    const fontSize = Math.max(12, Math.floor(W / (columns * 0.8)));
+    ctx.font = fontSize + 'px monospace';
+
+    // color gradient for head vs tail
+    const headColor = `hsl(${hue}, 100%, 70%)`;
+    const tailColor = `hsl(${hue}, 80%, 40%)`;
+
+    for (let i = 0; i < columns; i++) {
+      const x = i * (W / columns);
+      const y = drops[i] * (fontSize * 0.9);
+
+      // random char for this column
+      const text = charArray[Math.floor(Math.random() * charArray.length)];
+
+      // draw head
+      ctx.fillStyle = headColor;
+      ctx.fillText(text, x, y);
+
+      // small chance to render brighter head
+      if (Math.random() > 0.9) {
+        ctx.fillStyle = tailColor;
+        ctx.fillText(text, x, y - fontSize * 1.2);
+      }
+
+      // increment drop position
+      drops[i] = (drops[i] + (speed / 10) * (1 + Math.random() * 0.6)) % (H / (fontSize * 0.9));
+
+      // occasional reset of column to top
+      if (Math.random() > 0.995) drops[i] = 0;
+    }
+
+    animationId = requestAnimationFrame(draw);
+  }
+
+  function drawOnce(){
+    // paint background black
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,W,H);
+  }
+
+  // UI events
+  speedEl.addEventListener('input', (e) => {
+    speed = parseInt(e.target.value, 10);
+    speedVal.textContent = speed;
+  });
+  densityEl.addEventListener('input', (e) => {
+    density = parseInt(e.target.value, 10);
+    densityVal.textContent = density;
+    initDrops();
+  });
+  hueEl.addEventListener('input', (e) => {
+    hue = parseInt(e.target.value, 10);
+    hueVal.textContent = hue;
+  });
+
+  toggleBtn.addEventListener('click', () => {
+    running = !running;
+    toggleBtn.textContent = running ? 'Pause' : 'Play';
+    if (running) {
+      draw();
+    } else {
+      cancelAnimationFrame(animationId);
+    }
+  });
+
+  trailBtn.addEventListener('click', () => {
+    trail = !trail;
+    trailBtn.textContent = `Trail: ${trail ? 'On' : 'Off'}`;
+  });
+
+  clearBtn.addEventListener('click', () => {
+    ctx.clearRect(0,0,W,H);
+    drawOnce();
+  });
+
+  // keyboard shortcut: F for full screen, Space to pause
+  window.addEventListener('keydown', (e) => {
+    if (e.key === ' ') { e.preventDefault(); toggleBtn.click(); }
+    if (e.key.toLowerCase() === 'f') {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+  });
+
+  // handle resize
+  window.addEventListener('resize', resize);
+
+  // initialize
+  initDrops();
+  drawOnce();
+  draw();
+})();
+</script></body>
+</html>
